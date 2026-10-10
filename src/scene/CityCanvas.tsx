@@ -21,7 +21,8 @@ import { Clouds, Districts, Fillers, LotPlanters, Parks, Trees } from './World';
 import { Balloons, Beach, Butterflies, Meadow, Sailboats } from './Nature';
 import { Walkways } from './Paths';
 
-const HOME = { pos: [0, 75, 99] as const, target: [0, 1, 5] as const };
+/** Home view: looking across the island on a diagonal (rotated 22° from straight-on), slightly from the east. */
+const HOME = { pos: [35.2, 75, 92.2] as const, target: [0, 1, 5] as const };
 const HOME_POS = new Vector3(...HOME.pos);
 const HOME_TARGET = new Vector3(...HOME.target);
 

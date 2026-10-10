@@ -91,6 +91,21 @@ export function civicSlots(): { x: number; z: number; angle: number }[] {
   });
 }
 
+/** The lighthouse stands on the beach (front-left, between palms and umbrellas), on the sand's top. */
+const LIGHTHOUSE_ANGLE = (120 * Math.PI) / 180;
+export const LIGHTHOUSE_SPOT = { x: Math.cos(LIGHTHOUSE_ANGLE) * 52.4, z: Math.sin(LIGHTHOUSE_ANGLE) * 52.4, y: -0.4 };
+
+/**
+ * Fixed home of each civic building, chosen so it reads from the home camera: the short ones take the
+ * two front gaps, the lighthouse sits on the beach, taller or flat ones the side and back gaps.
+ */
+const CIVIC_GAP: Record<string, number> = { library: 2, observatory: 4, garden: 1, statue: 5, landmark: 6 };
+export function civicSpot(kind: string): { x: number; z: number; y: number } {
+  if (kind === 'lighthouse') return LIGHTHOUSE_SPOT;
+  const s = civicSlots()[CIVIC_GAP[kind] ?? 0];
+  return { x: s.x, z: s.z, y: 0 };
+}
+
 const DISTRICTS = districtPositions();
 const SLOTS = civicSlots();
 const HALF = DISTRICT_SIZE / 2 + 1;

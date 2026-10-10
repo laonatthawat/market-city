@@ -8,12 +8,11 @@ import { pct } from '../lib/format';
 import { useGame } from '../store/gameStore';
 import { DecoMesh } from './Decorations';
 import { Fountain } from './Fountain';
+import { Harbor } from './Harbor';
 import { merge, part } from './geom';
-import { BANK_SLOT, civicSlots } from './layout';
+import { BANK_SLOT, civicSlots, civicSpot } from './layout';
 
 const SLOTS = civicSlots();
-/** Remaining gaps, nearest to the home camera first. */
-const CIVIC_ORDER = [2, 4, 1, 5, 0, 6];
 const CIVIC_SCALE = 1.7;
 /** The dividend garden is a park in its own right, so it gets a much bigger plot. */
 const GARDEN_SCALE = 3.1;
@@ -24,11 +23,10 @@ const CIVIC_VIEW: Record<string, [number, number]> = { garden: [2, 22], lighthou
 export function landmarkSpot(id: string, progress: ProgressSnapshot): { x: number; z: number; h: number; dist: number } | null {
   if (id === 'bank') return { ...SLOTS[BANK_SLOT], h: 7, dist: 30 };
   if (id === 'index') return { x: 0, z: 0, h: 10, dist: 42 };
-  const i = DECOS.filter((d) => meets(d.requires, progress)).findIndex((d) => d.kind === id);
-  if (i < 0) return null;
-  const slot = SLOTS[CIVIC_ORDER[i]];
+  if (!DECOS.some((d) => d.kind === id && meets(d.requires, progress))) return null;
+  const spot = civicSpot(id);
   const [h, dist] = CIVIC_VIEW[id] ?? [5, 22];
-  return { x: slot.x, z: slot.z, h, dist };
+  return { x: spot.x, z: spot.z, h, dist };
 }
 
 /** Reserve Bank plus every unlocked civic building, placed on the open plots between districts. */
@@ -68,11 +66,12 @@ export function Landmarks({ dark }: { dark: boolean }) {
       <Clickable id="bank" x={bank.x} z={bank.z} radius={7.2} selected={landmark === 'bank'} onSelect={selectLandmark}>
         <ReserveBank x={0} z={0} cashShare={cashShare} dark={dark} onSelect={() => selectLandmark('bank')} />
       </Clickable>
-      {unlocked.map((d, i) => {
-        const slot = SLOTS[CIVIC_ORDER[i]];
+      {unlocked.some((d) => d.kind === 'lighthouse') && <Harbor dark={dark} />}
+      {unlocked.map((d) => {
+        const slot = civicSpot(d.kind);
         const garden = d.kind === 'garden';
         return (
-          <Clickable key={d.kind} id={d.kind} x={slot.x} z={slot.z} radius={garden ? 5.6 : 3.3} selected={landmark === d.kind} onSelect={selectLandmark}>
+          <Clickable key={d.kind} id={d.kind} x={slot.x} y={slot.y} z={slot.z} radius={garden ? 5.6 : 3.3} selected={landmark === d.kind} onSelect={selectLandmark}>
             {/* Fronts face the home camera so the entrances read at a glance. */}
             <group>
               <group scale={garden ? GARDEN_SCALE : CIVIC_SCALE}>
@@ -92,11 +91,11 @@ export function Landmarks({ dark }: { dark: boolean }) {
 }
 
 /** Click target around a landmark: pointer cursor, selection ring and an info card on click. */
-export function Clickable(props: { id: string; x: number; z: number; radius: number; selected: boolean; onSelect: (id: string) => void; children: ReactNode }) {
+export function Clickable(props: { id: string; x: number; y?: number; z: number; radius: number; selected: boolean; onSelect: (id: string) => void; children: ReactNode }) {
   const [hover, setHover] = useState(false);
   return (
     <group
-      position={[props.x, 0, props.z]}
+      position={[props.x, props.y ?? 0, props.z]}
       onClick={(e) => {
         e.stopPropagation();
         props.onSelect(props.id);

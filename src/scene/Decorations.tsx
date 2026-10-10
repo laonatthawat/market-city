@@ -1,7 +1,22 @@
 import { Gltf } from '@react-three/drei';
-import { Suspense } from 'react';
-import { BoxGeometry, ConeGeometry, CylinderGeometry, ExtrudeGeometry, IcosahedronGeometry, MeshLambertMaterial, Shape, SphereGeometry } from 'three';
-import type { BufferGeometry } from 'three';
+import { useFrame } from '@react-three/fiber';
+import { Suspense, useMemo, useRef } from 'react';
+import {
+  AdditiveBlending,
+  BoxGeometry,
+  ConeGeometry,
+  CylinderGeometry,
+  DoubleSide,
+  ExtrudeGeometry,
+  IcosahedronGeometry,
+  MeshBasicMaterial,
+  MeshLambertMaterial,
+  Shape,
+  SphereGeometry,
+  TorusGeometry,
+} from 'three';
+import type { BufferGeometry, Group } from 'three';
+import { useGame } from '../store/gameStore';
 import type { DecoKind } from '../data/unlocks';
 import { useModelOverride } from './assets';
 import { merge, part } from './geom';
@@ -67,66 +82,124 @@ const DECO_GEO: Record<Exclude<DecoKind, 'garden'>, { body: BufferGeometry; glow
       ...[-1, 1].map((s) => part(new SphereGeometry(0.08, 8, 6), s * 1.05, 1.42, 1.05, '#fff3d0')),
     ]),
   },
-  // Library: classical hall with steps, columns, pediment, tall windows and an open book over the door.
+  // Library: cream stone hall on a stepped base, six-column portico, pediment with an open book,
+  // blue roof with a cupola, lower side wings, planters and lamps.
   library: {
     body: merge([
-      box(3.0, 0.14, 2.7, 0, 0.07, 0.1, STONE_DARK),
-      box(2.8, 0.14, 2.5, 0, 0.21, 0.1, STONE),
-      box(2.6, 1.7, 1.9, 0, 1.13, -0.15, '#a9c0ec'),
-      box(2.7, 0.18, 2.1, 0, 2.05, -0.05, STONE),
-      ...[-1.05, -0.63, -0.21, 0.21, 0.63, 1.05].map((x) => cyl(0.09, 0.1, 1.72, x, 1.14, 0.98, WHITE, 8)),
-      box(2.6, 0.12, 0.3, 0, 0.34, 1.0, STONE),
-      part(gable(2.9, 0.75, 2.3), 0, 2.14, -0.05, '#7f97cf'),
-      part(gable(2.75, 0.62, 0.12), 0, 2.16, 1.04, STONE),
-      box(0.42, 0.85, 0.04, 0, 0.71, 0.82, DARK),
-      ...[-0.85, -0.45, 0.45, 0.85].map((x) => box(0.26, 0.75, 0.04, x, 1.15, 0.82, '#5e6f99')),
-      ...[-1, 1].map((s) => box(0.04, 0.75, 0.3, s * 1.31, 1.15, -0.2, '#5e6f99')),
-      ...[-1.25, 1.25].map((x) => part(new IcosahedronGeometry(0.3, 0), x, 0.5, 1.3, HEDGE)),
+      box(3.7, 0.1, 3.1, 0, 0.05, 0.1, STONE_DARK),
+      box(3.45, 0.1, 2.85, 0, 0.15, 0.1, STONE),
+      box(3.2, 0.1, 2.6, 0, 0.25, 0.1, STONE_DARK),
+      // Main hall and wings.
+      box(2.5, 1.5, 1.7, 0, 1.05, -0.2, '#efe6d6'),
+      box(0.75, 1.1, 1.45, -1.62, 0.85, -0.25, '#e6dccb'),
+      box(0.75, 1.1, 1.45, 1.62, 0.85, -0.25, '#e6dccb'),
+      box(0.85, 0.08, 1.55, -1.62, 1.44, -0.25, STONE_DARK),
+      box(0.85, 0.08, 1.55, 1.62, 1.44, -0.25, STONE_DARK),
+      // Portico: floor, six columns with bases and capitals, entablature and pediment.
+      box(2.6, 0.06, 0.8, 0, 0.33, 0.95, STONE),
+      ...[-1.05, -0.63, -0.21, 0.21, 0.63, 1.05].flatMap((x) => [
+        box(0.22, 0.08, 0.22, x, 0.4, 1.12, STONE_DARK),
+        cyl(0.075, 0.085, 1.2, x, 1.04, 1.12, WHITE, 10),
+        box(0.24, 0.08, 0.24, x, 1.68, 1.12, STONE_DARK),
+      ]),
+      box(2.7, 0.22, 0.95, 0, 1.83, 0.9, STONE),
+      part(gable(2.8, 0.6, 0.3), 0, 1.94, 1.2, STONE),
+      part(gable(2.75, 0.72, 1.8), 0, 1.8, -0.2, '#7f97cf'),
+      // Cupola on the roof.
+      cyl(0.28, 0.3, 0.38, 0, 2.62, -0.2, WHITE, 8),
+      part(new SphereGeometry(0.31, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0, 2.81, -0.2, '#7f97cf'),
+      // Door, windows (main hall front, wings front and sides).
+      box(0.5, 0.82, 0.03, 0, 0.75, 0.66, '#6b4a3a'),
+      ...[-0.78, 0.78].map((x) => box(0.3, 0.6, 0.03, x, 1.05, 0.66, '#5e6f99')),
+      ...[-1.62, 1.62].map((x) => box(0.36, 0.5, 0.03, x, 0.9, 0.48, '#5e6f99')),
+      ...[-1, 1].map((sx) => box(0.03, 0.5, 0.36, sx * 2.0, 0.9, -0.25, '#5e6f99')),
+      // Planters with topiary and lamp posts at the foot of the steps.
+      ...[-1, 1].flatMap((sx) => [
+        cyl(0.18, 0.2, 0.26, sx * 1.4, 0.43, 1.25, STONE_DARK, 8),
+        part(new IcosahedronGeometry(0.24, 0), sx * 1.4, 0.75, 1.25, HEDGE),
+        cyl(0.03, 0.04, 1.0, sx * 1.95, 0.5, 1.45, DARK, 6),
+      ]),
     ]),
     glow: merge([
-      // Open book emblem in the pediment.
-      part(new BoxGeometry(0.28, 0.2, 0.03).rotateY(0.35), -0.13, 2.45, 1.12, '#fff3d0'),
-      part(new BoxGeometry(0.28, 0.2, 0.03).rotateY(-0.35), 0.13, 2.45, 1.12, '#fff3d0'),
+      // Open book in the pediment, gold frieze line, cupola finial and lamp heads.
+      part(new BoxGeometry(0.28, 0.2, 0.03).rotateY(0.35), -0.13, 2.15, 1.36, '#fff3d0'),
+      part(new BoxGeometry(0.28, 0.2, 0.03).rotateY(-0.35), 0.13, 2.15, 1.36, '#fff3d0'),
+      box(2.72, 0.05, 0.02, 0, 1.76, 1.38, GOLD),
+      part(new SphereGeometry(0.07, 8, 6), 0, 3.16, -0.2, GOLD),
+      ...[-1, 1].map((sx) => part(new SphereGeometry(0.08, 8, 6), sx * 1.95, 1.05, 1.45, '#fff3d0')),
     ]),
   },
-  // Lighthouse on rocks: banded tower, gallery with railing, glowing lantern and a keeper's cottage.
+  // Lighthouse: octagonal stone foundation among a few rocks, a slim tower in seven red/white bands,
+  // gallery with railing, a tall glass lantern under a red cap and weathervane, and the keeper's
+  // cottage on the landward side. The beam sweeps (see <Beam>); the pier and boat are in Landmarks.
   lighthouse: {
     body: merge([
-      part(new IcosahedronGeometry(1.2, 0).scale(1.3, 0.45, 1.2), 0, 0.15, 0, '#b5adb9'),
-      part(new IcosahedronGeometry(0.6, 0).scale(1, 0.6, 1), 1.0, 0.2, 0.7, '#c9c2cc'),
-      ...[0, 1, 2, 3, 4].map((i) => cyl(0.78 - (i + 1) * 0.09, 0.78 - i * 0.09, 0.9, 0, 0.75 + i * 0.9, 0, i % 2 ? WHITE : '#ef6b6b', 14)),
-      cyl(0.62, 0.62, 0.08, 0, 5.1, 0, DARK, 16),
-      ...Array.from({ length: 12 }, (_, i) => (i / 12) * Math.PI * 2).map((a) => box(0.03, 0.3, 0.03, Math.cos(a) * 0.58, 5.29, Math.sin(a) * 0.58, DARK)),
-      cyl(0.6, 0.6, 0.03, 0, 5.44, 0, DARK, 16),
-      ...[0, 1, 2, 3].map((i) => box(0.04, 0.55, 0.04, Math.cos((i * Math.PI) / 2 + 0.78) * 0.36, 5.44, Math.sin((i * Math.PI) / 2 + 0.78) * 0.36, DARK)),
-      part(new ConeGeometry(0.52, 0.55, 12), 0, 5.98, 0, '#ef6b6b'),
-      part(new SphereGeometry(0.08, 6, 4), 0, 6.3, 0, DARK),
-      box(0.3, 0.5, 0.04, 0, 0.9, 0.7, DARK),
-      ...[1.6, 2.6, 3.5].map((y, i) => box(0.18, 0.28, 0.04, 0, y, 0.7 - (i + 1) * 0.08, '#5e6f99')),
-      // Keeper's cottage.
-      box(1.0, 0.7, 0.8, -1.05, 0.62, 0.55, WHITE),
-      part(gable(1.12, 0.45, 0.9), -1.05, 0.97, 0.55, '#ef6b6b'),
-      box(0.22, 0.4, 0.03, -1.05, 0.47, 0.96, '#9a6b52'),
+      ...[
+        [1.25, 0.2, 0.75, 0.55],
+        [-0.55, 0.15, -1.2, 0.5],
+        [0.95, 0.1, -0.95, 0.42],
+        [-1.45, 0.08, 1.05, 0.36],
+      ].map(([x, y, z, r]) => part(new IcosahedronGeometry(r, 0).scale(1, 0.65, 1), x, y, z, '#aaa2ae')),
+      part(new CylinderGeometry(1.05, 1.15, 0.36, 8).rotateY(Math.PI / 8), 0, 0.18, 0, '#cfc6bd'),
+      part(new CylinderGeometry(0.88, 0.95, 0.2, 8).rotateY(Math.PI / 8), 0, 0.46, 0, STONE),
+      // Tower: seven slim tapering bands.
+      ...[0, 1, 2, 3, 4, 5, 6].map((i) => {
+        const rb = 0.62 - i * 0.045;
+        return cyl(rb - 0.045, rb, 0.7, 0, 0.56 + (i + 0.5) * 0.7, 0, i % 2 ? WHITE : '#e8505b', 18);
+      }),
+      // Door with a step, and small windows climbing the tower.
+      box(0.28, 0.5, 0.04, 0, 0.82, 0.61, DARK),
+      box(0.45, 0.07, 0.22, 0, 0.6, 0.76, STONE_DARK),
+      ...[1.9, 2.9, 3.9, 4.8].map((y, i) => box(0.14, 0.22, 0.04, (i % 2 ? 1 : -1) * 0.1, y, 0.59 - i * 0.045, '#5e6f99')),
+      // Gallery: deck, railing posts and top rail.
+      cyl(0.62, 0.5, 0.12, 0, 5.52, 0, DARK, 18),
+      ...Array.from({ length: 16 }, (_, i) => (i / 16) * Math.PI * 2).map((a) => box(0.022, 0.32, 0.022, Math.cos(a) * 0.58, 5.74, Math.sin(a) * 0.58, DARK)),
+      part(new TorusGeometry(0.58, 0.02, 4, 32).rotateX(Math.PI / 2), 0, 5.9, 0, DARK),
+      // Lantern mullions, cap, ventilator ball and weathervane.
+      ...[0, 1, 2, 3, 4, 5].map((i) => box(0.035, 0.62, 0.035, Math.cos((i * Math.PI) / 3) * 0.32, 5.9, Math.sin((i * Math.PI) / 3) * 0.32, DARK)),
+      cyl(0.38, 0.38, 0.05, 0, 6.23, 0, DARK, 16),
+      part(new ConeGeometry(0.44, 0.46, 16), 0, 6.48, 0, '#e8505b'),
+      part(new SphereGeometry(0.065, 8, 6), 0, 6.75, 0, DARK),
+      box(0.02, 0.22, 0.02, 0, 6.9, 0, DARK),
+      box(0.26, 0.02, 0.05, 0.04, 6.98, 0, DARK),
+      // Keeper's cottage on the landward side, with a chimney, door and windows.
+      box(1.05, 0.72, 0.85, -1.35, 0.36, -0.55, WHITE),
+      part(gable(1.18, 0.46, 0.97), -1.35, 0.72, -0.55, '#d9776a'),
+      box(0.14, 0.32, 0.14, -1.6, 1.02, -0.7, '#b08a7a'),
+      box(0.22, 0.4, 0.03, -1.15, 0.2, -0.11, '#9a6b52'),
+      box(0.2, 0.2, 0.03, -1.55, 0.45, -0.11, '#5e6f99'),
+      box(0.03, 0.2, 0.2, -1.88, 0.45, -0.55, '#5e6f99'),
     ]),
-    glow: merge([cyl(0.36, 0.36, 0.52, 0, 5.43, 0, '#fff3a6', 12)]),
+    glow: merge([cyl(0.3, 0.3, 0.6, 0, 5.9, 0, '#fff3a6', 12)]),
   },
-  // Observatory: drum with windows, dome with an open slit and a telescope, stairs and an antenna.
+  // Observatory: stone podium, windowed drum with pilasters and a cornice, a purple ribbed dome that
+  // slowly turns with its telescope (see <SpinningDome>), and an annex with a radio dish.
   observatory: {
     body: merge([
-      cyl(1.45, 1.5, 0.14, 0, 0.07, 0, STONE_DARK, 20),
-      cyl(1.2, 1.25, 1.7, 0, 0.99, 0, '#e9e2f2', 18),
-      cyl(1.27, 1.27, 0.12, 0, 1.86, 0, '#cfc4e4', 18),
-      part(new SphereGeometry(1.18, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2), 0, 1.92, 0, '#b9a8ec'),
-      // Dome slit (dark) and the telescope tube poking out.
-      part(new BoxGeometry(0.36, 1.05, 0.08).rotateX(-Math.PI / 4), 0, 1.92 + 0.86, 0.86, DARK),
-      part(new CylinderGeometry(0.12, 0.16, 1.3, 10).rotateX(Math.PI / 4), 0, 1.92 + 1.05, 1.05, '#5b5566'),
-      ...Array.from({ length: 6 }, (_, i) => ((i + 0.5) / 6) * Math.PI * 2).map((a) => part(new BoxGeometry(0.28, 0.5, 0.04).rotateY(-a + Math.PI / 2), Math.cos(a) * 1.22, 1.15, Math.sin(a) * 1.22, '#5e6f99')),
-      box(0.4, 0.75, 0.05, 0, 0.52, 1.22, DARK),
-      box(0.8, 0.1, 0.4, 0, 0.05, 1.45, STONE),
-      cyl(0.02, 0.025, 0.9, -0.85, 2.6, -0.5, DARK, 5),
-      part(new SphereGeometry(0.16, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI), -0.85, 3.05, -0.5, WHITE),
+      cyl(1.62, 1.72, 0.14, 0, 0.07, 0, STONE_DARK, 24),
+      box(0.95, 0.1, 0.36, 0, 0.05, 1.78, STONE),
+      cyl(1.34, 1.36, 0.2, 0, 0.24, 0, '#d9cfe6', 22),
+      cyl(1.25, 1.28, 1.3, 0, 0.99, 0, '#ece6f4', 22),
+      cyl(1.36, 1.3, 0.14, 0, 1.6, 0, '#d9cfe6', 22),
+      // Pilasters and windows round the drum (the door takes the front).
+      ...Array.from({ length: 8 }, (_, i) => ((i + 0.5) / 8) * Math.PI * 2).map((a) =>
+        part(new BoxGeometry(0.1, 1.3, 0.08).rotateY(-a + Math.PI / 2), Math.cos(a) * 1.28, 0.99, Math.sin(a) * 1.28, '#d9cfe6'),
+      ),
+      ...Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2)
+        .filter((a) => Math.abs(a - Math.PI / 2) > 0.1)
+        .map((a) => part(new BoxGeometry(0.24, 0.48, 0.04).rotateY(-a + Math.PI / 2), Math.cos(a) * 1.27, 1.0, Math.sin(a) * 1.27, '#4a5878')),
+      box(0.44, 0.72, 0.04, 0, 0.6, 1.27, '#6b4a3a'),
+      box(0.62, 0.05, 0.28, 0, 1.0, 1.36, WHITE),
+      // Annex with a flat roof and a radio dish.
+      box(1.1, 0.72, 0.95, 1.6, 0.42, -0.45, '#e9e2f2'),
+      box(1.2, 0.06, 1.05, 1.6, 0.81, -0.45, '#d9cfe6'),
+      box(0.26, 0.42, 0.03, 1.6, 0.27, 0.04, '#6b4a3a'),
+      cyl(0.04, 0.05, 0.4, 1.6, 1.04, -0.45, DARK, 6),
+      part(new SphereGeometry(0.45, 12, 4, 0, Math.PI * 2, 0, Math.PI / 3.2).rotateX(Math.PI + 0.6), 1.6, 1.45, -0.4, WHITE),
+      part(new IcosahedronGeometry(0.32, 0), -1.55, 0.35, 1.0, HEDGE),
+      part(new IcosahedronGeometry(0.24, 0), -1.75, 0.28, 0.55, '#86c07a'),
     ]),
-    glow: merge([part(new SphereGeometry(0.05, 6, 4), -0.85, 3.08, -0.5, '#ff5a6e'), part(new BoxGeometry(0.3, 0.08, 0.02), 0, 0.98, 1.25, '#fff3d0')]),
+    glow: merge([part(new SphereGeometry(0.05, 6, 4), 1.6, 1.32, -0.4, '#ff5a6e'), box(0.3, 0.07, 0.02, 0, 0.98, 1.38, '#fff3d0')]),
   },
   // Hall of fame: colonnaded rotunda on a stepped base with a gold-tipped obelisk rising from it.
   landmark: {
@@ -157,6 +230,54 @@ function PrimitiveDeco({ kind, bloom = 0 }: { kind: DecoKind; bloom?: number }) 
     <group>
       <mesh geometry={g.body} material={BODY_MAT} castShadow receiveShadow />
       <mesh geometry={g.glow} material={GLOW_MAT} castShadow />
+      {kind === 'observatory' && <SpinningDome />}
+      {kind === 'lighthouse' && <Beam />}
+    </group>
+  );
+}
+
+// --- Moving parts ------------------------------------------------------------------
+
+const DOME_Y = 1.67;
+/** Observatory dome with ribs, the open slit and the telescope poking out of it; turns slowly. */
+const DOME_GEO = merge([
+  part(new SphereGeometry(1.22, 22, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0, DOME_Y, 0, '#b9a8ec'),
+  ...[0, 1, 2, 3].map((i) => part(new TorusGeometry(1.235, 0.025, 4, 28, Math.PI).rotateY((i * Math.PI) / 4), 0, DOME_Y, 0, '#9483c9')),
+  part(new BoxGeometry(0.4, 1.15, 0.12).rotateX(-Math.PI / 4), 0, DOME_Y + 0.87, 0.87, '#2f3446'),
+  part(new CylinderGeometry(0.12, 0.16, 1.4, 10).rotateX(Math.PI / 4), 0, DOME_Y + 1.05, 1.05, '#5b5566'),
+]);
+const LENS_GEO = merge([part(new CylinderGeometry(0.13, 0.13, 0.04, 10).rotateX(Math.PI / 4), 0, DOME_Y + 1.54, 1.54, '#9fd8ff')]);
+
+function SpinningDome() {
+  const ref = useRef<Group>(null);
+  useFrame((_, dt) => {
+    if (ref.current) ref.current.rotation.y += dt * 0.12;
+  });
+  return (
+    <group ref={ref}>
+      <mesh geometry={DOME_GEO} material={BODY_MAT} castShadow />
+      <mesh geometry={LENS_GEO} material={GLOW_MAT} />
+    </group>
+  );
+}
+
+/** Two light beams sweeping round from the lighthouse lantern (brighter at night). */
+const BEAM_GEO = merge([
+  new ConeGeometry(0.75, 7, 14, 1, true).translate(0, -3.5, 0).rotateZ(Math.PI / 2),
+  new ConeGeometry(0.75, 7, 14, 1, true).translate(0, -3.5, 0).rotateZ(Math.PI / 2).rotateY(Math.PI),
+]);
+
+function Beam() {
+  const ref = useRef<Group>(null);
+  const dark = useGame((s) => s.theme === 'dark');
+  const mat = useMemo(() => new MeshBasicMaterial({ color: '#fff3b0', transparent: true, depthWrite: false, side: DoubleSide, blending: AdditiveBlending }), []);
+  mat.opacity = dark ? 0.3 : 0.08;
+  useFrame((_, dt) => {
+    if (ref.current) ref.current.rotation.y += dt * 0.7;
+  });
+  return (
+    <group ref={ref} position-y={5.9}>
+      <mesh geometry={BEAM_GEO} material={mat} raycast={() => {}} />
     </group>
   );
 }

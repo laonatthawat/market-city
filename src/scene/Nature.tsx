@@ -25,7 +25,7 @@ import type { BufferGeometry, Group, InstancedMesh } from 'three';
 import { useGame } from '../store/gameStore';
 import { merge, part } from './geom';
 import type { CityLayout } from './layout';
-import { ISLAND_RADIUS } from './layout';
+import { ISLAND_RADIUS, LIGHTHOUSE_SPOT } from './layout';
 
 /**
  * Natural detail around the city: wild flowers, grass tufts, boulders, beach palms and coastal rocks,
@@ -179,7 +179,7 @@ const PALMS = (() => {
     const a = (i / 18) * Math.PI * 2 + (r() - 0.5) * 0.18;
     const rad = ISLAND_RADIUS + 1.4 + r() * 1.1;
     return { x: Math.cos(a) * rad, z: Math.sin(a) * rad, rot: -a + (r() - 0.5) * 0.8, s: 0.85 + r() * 0.4, ph: r() * 6 };
-  });
+  }).filter((p) => Math.hypot(p.x - LIGHTHOUSE_SPOT.x, p.z - LIGHTHOUSE_SPOT.z) > 4.5);
 })();
 
 const COAST_ROCKS = (() => {
@@ -233,7 +233,7 @@ const UMBRELLA_SPOTS = (() => {
 /** Coastal rocks that keep clear of the palms and beach umbrellas (and of each other). */
 const BEACH_ROCKS = COAST_ROCKS.filter((k, i) => {
   const clear = (x: number, z: number, r: number) => Math.hypot(k.x - x, k.z - z) > r + k.s;
-  return PALMS.every((p) => clear(p.x, p.z, 0.9)) && UMBRELLA_SPOTS.every((u) => clear(u.x, u.z, 1.5)) && COAST_ROCKS.slice(0, i).every((o) => clear(o.x, o.z, o.s));
+  return clear(LIGHTHOUSE_SPOT.x, LIGHTHOUSE_SPOT.z, 3.6) && PALMS.every((p) => clear(p.x, p.z, 0.9)) && UMBRELLA_SPOTS.every((u) => clear(u.x, u.z, 1.5)) && COAST_ROCKS.slice(0, i).every((o) => clear(o.x, o.z, o.s));
 });
 
 function Umbrellas({ geo, spots, dark }: { geo: BufferGeometry; spots: typeof UMBRELLA_SPOTS; dark: boolean }) {
