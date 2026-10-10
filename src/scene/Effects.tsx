@@ -42,35 +42,54 @@ export function AutoQuality() {
   );
 }
 
-/** Pixels rendered per frame in high mode before the resolution is scaled down (≈ 1280×1000). */
-const PIXEL_BUDGET = 1.3e6;
+/** Pixels rendered per frame in high mode before the resolution is scaled down (≈ 1150×870). */
+const PIXEL_BUDGET = 1.0e6;
 
 /**
  * Keeps high mode smooth on big or high-DPI screens: the render resolution is capped to a pixel
- * budget, then eased down further (to 60% of the cap) while the frame rate is low and back up when
- * there is headroom. UI stays sharp; only the 3D canvas is rendered at the lower resolution.
+ * budget, then stepped down (to 55% of the cap) while the frame rate is low and back up only after
+ * a sustained stretch of headroom. Every change resizes the canvas and its post-processing buffers,
+ * which itself causes a hitch, so changes are coarse and rare (no oscillating every few seconds).
+ * UI stays sharp; only the 3D canvas is rendered at the lower resolution.
  */
 export function AdaptiveResolution() {
   const { size, setDpr } = useThree();
   const scale = useRef(1);
-  const frames = useRef({ n: 0, t: 0 });
+  const frames = useRef({ n: 0, t: 0, good: 0, cooldown: 0 });
   const apply = () => {
     const native = Math.min(window.devicePixelRatio || 1, 1.5);
     const cap = Math.sqrt(PIXEL_BUDGET / Math.max(1, size.width * size.height));
-    setDpr(Math.max(0.5, Math.min(native, cap) * scale.current));
+    setDpr(Math.round(Math.max(0.5, Math.min(native, cap) * scale.current) * 20) / 20);
   };
   useEffect(apply, [size.width, size.height]); // eslint-disable-line react-hooks/exhaustive-deps
   useFrame((_, dt) => {
     const f = frames.current;
+    // Ignore hidden-tab gaps and the frame right after a resize.
+    if (dt > 0.25) return;
     f.n++;
     f.t += dt;
     if (f.t < 2) return;
     const fps = f.n / f.t;
     f.n = 0;
     f.t = 0;
-    const next = fps < 42 ? Math.max(0.6, scale.current - 0.1) : fps > 56 ? Math.min(1, scale.current + 0.05) : scale.current;
+    if (f.cooldown > 0) {
+      f.cooldown--;
+      return;
+    }
+    let next = scale.current;
+    if (fps < 40) {
+      next = Math.max(0.55, scale.current - 0.15);
+      f.good = 0;
+    } else if (fps > 57) {
+      // Step back up only after ~8 s of comfortable frame rate.
+      if (++f.good >= 4) {
+        next = Math.min(1, scale.current + 0.1);
+        f.good = 0;
+      }
+    } else f.good = 0;
     if (next !== scale.current) {
       scale.current = next;
+      f.cooldown = 2;
       apply();
     }
   });
