@@ -12,7 +12,7 @@ import { IndexTower } from './IndexTower';
 import { Clickable, Landmarks, landmarkSpot } from './Landmarks';
 import { getLayout } from './useLayout';
 import { bodyColor, heightFromCap, needsScaffold, widthFromRevenue, windowColor } from './visuals';
-import { AutoQuality, Effects } from './Effects';
+import { AdaptiveResolution, AutoQuality, Effects } from './Effects';
 import { Birds, CityWalkers, Smoke } from './Life';
 import { Cars, TrafficLights } from './Traffic';
 import { WeatherFx, weatherFx } from './Weather';
@@ -46,6 +46,7 @@ export default function CityCanvas() {
       <Suspense fallback={null}>
         <SceneContents dark={dark} />
         {high && <Effects dark={dark} />}
+        {high && <AdaptiveResolution />}
       </Suspense>
       <AutoQuality />
     </Canvas>
