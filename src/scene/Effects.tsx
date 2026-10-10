@@ -1,6 +1,6 @@
 import { PerformanceMonitor } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Bloom, EffectComposer, FXAA, Vignette } from '@react-three/postprocessing';
+import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import { useEffect, useRef } from 'react';
 import { UnsignedByteType } from 'three';
 import { useGame } from '../store/gameStore';
@@ -8,12 +8,13 @@ import { useGame } from '../store/gameStore';
 /** Post-processing for the "high" graphics setting: window/sign bloom and a soft vignette. */
 export function Effects({ dark }: { dark: boolean }) {
   return (
-    // Tuned for integrated GPUs: 8-bit buffers, no MSAA (cheap FXAA instead), few bloom levels.
+    // 8-bit buffers and few bloom levels keep it cheap. Anti-aliasing is real MSAA: FXAA (plus a
+    // sub-native resolution) made the whole city look soft next to the crisp light mode. Daytime
+    // bloom is kept faint so it doesn't haze the picture; it's mostly for windows at night.
     // Tilt-shift was dropped: it cost ~10% of the frame for a blur many players found distracting.
-    <EffectComposer multisampling={0} frameBufferType={UnsignedByteType}>
-      <Bloom mipmapBlur levels={3} intensity={dark ? 0.9 : 0.3} luminanceThreshold={dark ? 0.5 : 0.85} luminanceSmoothing={0.25} />
-      <Vignette offset={0.32} darkness={dark ? 0.5 : 0.3} />
-      <FXAA />
+    <EffectComposer multisampling={4} frameBufferType={UnsignedByteType}>
+      <Bloom mipmapBlur levels={3} intensity={dark ? 0.9 : 0.12} luminanceThreshold={dark ? 0.5 : 0.95} luminanceSmoothing={0.2} />
+      <Vignette offset={0.38} darkness={dark ? 0.45 : 0.2} />
     </EffectComposer>
   );
 }
@@ -42,8 +43,8 @@ export function AutoQuality() {
   );
 }
 
-/** Pixels rendered per frame in high mode before the resolution is scaled down (≈ 1440×1000). */
-const PIXEL_BUDGET = 1.45e6;
+/** Pixels rendered per frame in high mode before the resolution is scaled down (a 1080p screen renders at native resolution). */
+const PIXEL_BUDGET = 2.2e6;
 
 /**
  * Keeps high mode smooth on big or high-DPI screens: the render resolution is capped to a pixel
