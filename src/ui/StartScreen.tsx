@@ -2,12 +2,16 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { ACHIEVEMENTS } from '../data/achievements';
 import { DECOS } from '../data/unlocks';
+import { CHART_LESSONS } from '../data/chartLessons';
 import { CHAPTERS } from '../data/tutorials';
 import { CHALLENGES } from '../engine/challenges';
 import { randomSeed } from '../engine/rng';
 import type { RunModifiers } from '../engine/types';
 import { baht, pct, thaiDate, toneClass } from '../lib/format';
+import { loadJson, saveJson } from '../lib/storage';
 import { useGame } from '../store/gameStore';
+import { ChartDrill } from './ChartDrill';
+import { ChartLessonPlayer, loadChartLessonsDone } from './ChartLesson';
 import { CivicList } from './CivicUnlock';
 import { SettingsButton } from './Settings';
 
@@ -287,7 +291,78 @@ function RunSetup({ sandbox, shared }: { sandbox: boolean; shared?: { seed: numb
   );
 }
 
+type Track = 'basics' | 'charts';
+
+/** Lessons tab: the investing chapters (played in the city) and the chart-reading course. */
 function ChapterList() {
+  const [track, setTrack] = useState<Track>(() => (loadJson<Track>('mc.lessonTrack', 'basics') === 'charts' ? 'charts' : 'basics'));
+  const pick = (t: Track) => {
+    setTrack(t);
+    saveJson('mc.lessonTrack', t);
+  };
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-1.5">
+        {(
+          [
+            ['basics', '🏙️ พื้นฐานการลงทุน'],
+            ['charts', '📈 อ่านกราฟเทคนิค'],
+          ] as [Track, string][]
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => pick(id)}
+            className={`rounded-2xl border px-2 py-1.5 text-xs font-semibold transition sm:text-sm ${track === id ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted hover:text-ink'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {track === 'basics' ? <BasicsList /> : <ChartLessonList />}
+    </div>
+  );
+}
+
+function ChartLessonList() {
+  const [done, setDone] = useState(loadChartLessonsDone);
+  const [open, setOpen] = useState<string | null>(null);
+  const [drill, setDrill] = useState(false);
+  const lesson = CHART_LESSONS.find((l) => l.id === open);
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted">
+        บทละราว 3–5 นาที ใช้กราฟราคาจริงย้อนหลัง พร้อมชี้จุดสำคัญบนกราฟและมีคำถามให้ลองอ่านเอง · เรียนแล้ว {done.length}/{CHART_LESSONS.length} บท
+      </p>
+      <div className="scroll-thin max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+        {CHART_LESSONS.map((l) => {
+          const ok = done.includes(l.id);
+          return (
+            <button key={l.id} className="flex w-full items-center gap-3 rounded-2xl border border-line bg-card-solid p-3 text-left transition hover:border-accent" onClick={() => setOpen(l.id)}>
+              <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl font-display font-semibold ${ok ? 'bg-up text-white' : 'bg-soft'}`}>{ok ? '✓' : l.number}</div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{l.title}</div>
+                <div className="truncate text-xs text-muted">{l.concept}</div>
+              </div>
+              <span className="text-accent">▶</span>
+            </button>
+          );
+        })}
+        <button className="flex w-full items-center gap-3 rounded-2xl border border-accent/40 bg-accent-soft/60 p-3 text-left transition hover:border-accent" onClick={() => setDrill(true)}>
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-accent text-lg text-white">🎯</div>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">แบบฝึกทายกราฟ</div>
+            <div className="truncate text-xs text-muted">สุ่มกราฟหุ้นจริงแบบปิดชื่อ ลองตีเส้นแล้วทายว่าอีก 1 เดือนราคาจะไปทางไหน</div>
+          </div>
+          <span className="text-accent">▶</span>
+        </button>
+      </div>
+      {lesson && <ChartLessonPlayer lesson={lesson} onClose={() => setOpen(null)} onDone={() => setDone(loadChartLessonsDone())} />}
+      {drill && <ChartDrill onClose={() => setDrill(false)} />}
+    </div>
+  );
+}
+
+function BasicsList() {
   const progress = useGame((s) => s.progress);
   const startChapter = useGame((s) => s.startChapter);
   const dataset = useGame((s) => s.dataset);
